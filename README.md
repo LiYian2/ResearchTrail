@@ -1,0 +1,186 @@
+# ResearchTrail
+
+**ResearchTrail: A Citation-Network Agent for Personalized Research Reading Paths**
+
+ResearchTrail helps a user enter a new research field from a natural-language goal. It retrieves relevant papers, constructs citation and semantic-similarity networks, identifies foundational, bridge, and frontier papers, and generates a personalized reading path with explanations and visualizations.
+
+Repository for StudyClawHub submission:
+
+- GitHub: `https://github.com/LiYian2/ResearchTrail`
+- Submit type: `Agent`
+- Agent path: `.`
+- Child skill paths:
+  - `skill_retrieval`
+  - `skill_graph`
+  - `skill_reading_path`
+
+## Why This Is Not Just an arXiv Summarizer
+
+Most paper briefing agents stop at search and abstract summaries. ResearchTrail instead models a research field as a paper network:
+
+```text
+User learning goal
+  -> LLM/rule planner
+  -> Literature Retrieval Skill
+  -> Citation + Similarity Graph Skill
+  -> Reading Path + Report Skill
+  -> Report, figures, state file, and follow-up suggestions
+```
+
+LLMs are used only for flexible semantic work: intent parsing, query normalization, community labels, and evidence-grounded explanations. Deterministic code handles retrieval, deduplication, graph construction, PageRank, betweenness, community detection, scoring, and evaluation.
+
+## Skills
+
+| Skill | Folder | When the agent should use it | Backend |
+|---|---|---|---|
+| Literature Retrieval | `skill_retrieval/` | User asks to enter, survey, learn, or explore a research topic | arXiv/OpenAlex/Semantic Scholar retrieval and corpus quality checks |
+| Research Graph Analysis | `skill_graph/` | A paper corpus exists and the agent needs field structure or paper roles | citation/similarity graph, PageRank, betweenness, communities |
+| Reading Path and Report | `skill_reading_path/` | Graph scores exist and the user needs a reading list, report, figures, or follow-up explanation | staged path generation, evidence packets, Markdown report, visualizations |
+
+Each skill has a StudyClawHub-compatible `SKILL.md` that tells an agent when to use the skill, how to invoke the code, and how to handle failures.
+
+## Quick Start
+
+Use the conda environment described below.
+
+```bash
+conda env create -f environment.yml
+conda activate network
+python -m pytest tests -q
+```
+
+Run a stable offline demo:
+
+```bash
+python main.py "I am a beginner and want to understand Vision Transformer" \
+  --demo \
+  --llm off \
+  --max-papers 40 \
+  --output-dir outputs/demo_vit
+```
+
+Run a live LLM-assisted workflow:
+
+```bash
+export SILICON_FLOW_API="your_siliconflow_key"
+export S2_API_KEY="your_semantic_scholar_key"  # optional but recommended
+
+python main.py "I want to understand the research trail of diffusion models, from DDPM to score-based modeling and latent diffusion" \
+  --llm auto \
+  --llm-provider siliconflow \
+  --llm-model Pro/zai-org/GLM-4.7 \
+  --max-papers 45 \
+  --output-dir outputs/diffusion_live
+```
+
+Run the Gradio demo interface:
+
+```bash
+python app.py
+```
+
+## Outputs
+
+Each full run writes:
+
+- `research_report.md`: final reading-path report
+- `research_graph.png`: paper network visualization
+- `scores_distribution.png`: role score visualization
+- `state.json`: machine-readable papers, graph, scores, communities, and path metrics
+
+Sample output files are included in `outputs_submission/`:
+
+- `sample_research_report.md`
+- `sample_research_graph.png`
+- `sample_scores_distribution.png`
+
+## Evaluation Summary
+
+Full evaluation details are in `docs/evaluation.md`.
+
+### Overall Agent Benchmark
+
+| Scope | Topics | Papers | Edges | Communities | Landmark Hit | Topic Precision | Ordering | Community Coverage | Stage Coverage |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| All benchmark topics | 12 | 21.5 | 121.8 | 3.9 | 61.9% | 91.7% | 68.4% | 91.4% | 95.8% |
+| Excluding low-corpus protein run | 11 | 22.7 | 131.7 | 4.0 | 67.6% | 93.3% | 74.6% | 90.6% | 97.7% |
+
+### Skill Ablations
+
+| Component | Main ablation | Key result |
+|---|---|---|
+| Skill 1 retrieval | arXiv only vs OpenAlex only vs combined vs filtering vs verified landmarks | Combined retrieval + filtering improves graph edge yield from 5.00 to 5.93 and topic precision from 60.6% to 66.6%. |
+| Skill 2 graph | citation-only vs similarity-only vs hybrid | Citation-only is sparse; hybrid reaches 96.9% largest component ratio and 91.4% path community coverage. |
+| Skill 3 reading path | random vs citation count vs PageRank vs ResearchTrail staged | ResearchTrail is the only variant with high stage coverage, 97.7%, while keeping 95.3% topic precision. |
+
+## Related Work
+
+ResearchTrail combines ideas from four areas:
+
+- Literature discovery systems such as arXiv search, Semantic Scholar, OpenAlex, and survey-oriented paper recommendation.
+- Social network analysis methods, especially PageRank, betweenness centrality, community detection, and bridge-node interpretation.
+- Citation-network and bibliometric analysis, where papers are treated as nodes and citation/reference links encode scholarly dependency.
+- LLM-assisted agent workflows, where LLMs handle semantic planning and report writing while deterministic tools perform verifiable computation.
+
+Compared with daily arXiv briefing projects, ResearchTrail focuses on **field structure and reading order** rather than only recent paper summaries.
+
+## Reproducibility
+
+Create the environment:
+
+```bash
+conda env create -f environment.yml
+conda activate network
+```
+
+If you already have the course environment:
+
+```bash
+conda activate network
+pip install -r requirements.txt
+```
+
+Optional API keys:
+
+```bash
+export SILICON_FLOW_API="..."  # LLM planning, community labels, explanations
+export S2_API_KEY="..."        # Semantic Scholar citation/reference enrichment
+```
+
+Run tests:
+
+```bash
+python -m pytest tests -q
+```
+
+Run evaluation scripts:
+
+```bash
+python -m evaluation.corpus_ablation_batch --max-papers 45 --output-dir outputs/corpus_ablation/full_12_topics
+python -m evaluation.graph_ablation --topic diffusion_models --max-papers 30 --output-dir outputs/graph_ablation/diffusion
+python -m evaluation.benchmark_runner --max-papers 45 --output-dir outputs/benchmark_full_llm_normalized
+```
+
+## Repository Structure
+
+```text
+.
+├── AGENTS.md
+├── README.md
+├── STUDYCLAWHUB_SUBMISSION.md
+├── main.py
+├── app.py
+├── agent/
+├── skill_retrieval/
+├── skill_graph/
+├── skill_reading_path/
+├── shared/
+├── evaluation/
+├── docs/
+├── outputs_submission/
+└── tests/
+```
+
+## License
+
+MIT License. See `LICENSE`.

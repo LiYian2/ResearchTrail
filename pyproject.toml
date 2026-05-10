@@ -1,0 +1,26 @@
+[project]
+name = "researchtrail"
+version = "0.1.0"
+description = "ResearchTrail: A Citation-Network Agent for Personalized Literature Entry and Reading Path Planning"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "networkx>=3.3",
+    "matplotlib>=3.9",
+    "numpy>=2.1",
+    "scikit-learn>=1.5",
+    "requests>=2.32",
+    "tqdm>=4.66",
+    "gradio>=4.44",
+    "socksio>=1.0",
+]
+
+[project.scripts]
+researchtrail = "main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["shared", "agent", "skill_retrieval", "skill_graph", "skill_reading_path", "main.py"]
