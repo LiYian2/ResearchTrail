@@ -25,7 +25,7 @@ ResearchTrail is a code-backed, LLM-assisted research navigation agent. It retri
 ## Demo Command
 
 ```bash
-python main.py "I am a beginner and want to understand Vision Transformer" --demo --llm off --max-papers 40 --output-dir outputs/demo_vit
+python main.py "I am a beginner and want to understand Vision Transformer" --demo --llm off --max-papers 40 --similarity-backend lsa --output-dir outputs/demo_vit
 ```
 
 ## Live Command
@@ -39,6 +39,7 @@ python main.py "I want to understand retrieval-augmented generation from dense r
 ## Evidence Files
 
 - Agent instructions: `AGENTS.md`
+- Report personalization instructions: `AGENT.md`, `MEMORY.md`
 - Skill instructions: `skill_retrieval/SKILL.md`, `skill_graph/SKILL.md`, `skill_reading_path/SKILL.md`
 - Sample output: `outputs_submission/`
 - Evaluation summary: `docs/evaluation.md`

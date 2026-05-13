@@ -76,6 +76,7 @@ class SharedDataLayer:
         keep.references = refs
         citations = list(dict.fromkeys((keep.citations or []) + (other.citations or [])))
         keep.citations = citations
+        keep.external_ids = {**(other.external_ids or {}), **(keep.external_ids or {})}
         return keep
 
     def get_paper(self, paper_id: str) -> Optional[Paper]:

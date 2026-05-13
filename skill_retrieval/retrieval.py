@@ -137,12 +137,35 @@ class LiteratureRetrievalSkill:
             main_queries = self._clean_query_list(query_plan.get("main_queries", []))
             prereq_queries = self._clean_query_list(query_plan.get("prerequisite_queries", []))
             exclude_terms = self._clean_query_list(query_plan.get("exclude_terms", []))
-            main_queries.extend(self._get_landmark_queries(profile.topic))
-            main_queries = self._dedupe_strings(main_queries)
+            main_queries = self._dedupe_queries(self._topic_anchor_queries(profile.topic) + main_queries)
             if main_queries:
                 return main_queries[:8], prereq_queries[:5], exclude_terms[:12]
 
         return self._generate_query_plan(profile.topic, profile.user_level), [], []
+
+    def _topic_anchor_queries(self, topic: str) -> list[str]:
+        queries = [topic.strip()] if topic.strip() else []
+        anchor = self._extract_parenthetical_topic_anchor(topic)
+        if anchor:
+            expanded, acronym = anchor
+            queries.extend([
+                f'"{expanded}"',
+                f"{expanded} {acronym}",
+                f"{acronym} recurrent neural network",
+            ])
+        return self._dedupe_queries(queries)
+
+    @staticmethod
+    def _dedupe_queries(queries: list[str]) -> list[str]:
+        out = []
+        seen = set()
+        for query in queries:
+            key = query.lower().strip()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            out.append(query)
+        return out
 
     @staticmethod
     def _clean_query_list(items: object) -> list[str]:
@@ -156,18 +179,6 @@ class LiteratureRetrievalSkill:
             if item and item not in cleaned:
                 cleaned.append(item)
         return cleaned
-
-    @staticmethod
-    def _dedupe_strings(items: list[str]) -> list[str]:
-        seen = set()
-        out = []
-        for item in items:
-            key = item.lower()
-            if key in seen:
-                continue
-            seen.add(key)
-            out.append(item)
-        return out
 
     def _generate_query_plan(self, topic: str, level: UserLevel) -> list[str]:
         queries = [topic.strip()]
@@ -217,28 +228,6 @@ class LiteratureRetrievalSkill:
                 "counterfactual regret minimization extensive-form games",
                 "solving imperfect-information games counterfactual regret minimization",
                 "CFR poker regret minimization",
-            ]
-        if "retrieval-augmented" in topic_lower or "retrieval augmented" in topic_lower or re.search(r"(?<![a-z0-9])rag(?![a-z0-9])", topic_lower):
-            return [
-                "retrieval augmented generation",
-                '"Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks"',
-                '"Dense Passage Retrieval for Open-Domain Question Answering"',
-                '"Fusion-in-Decoder" retrieval augmented generation',
-                "RETRO retrieval enhanced transformer",
-                "Atlas retrieval augmented language models",
-                "Self-RAG retrieval augmented generation",
-                "agentic RAG retrieval augmented generation",
-            ]
-        if ("graph neural" in topic_lower or "gnn" in topic_lower or "graph transformer" in topic_lower) and "graph" in topic_lower:
-            return [
-                '"Semi-Supervised Classification with Graph Convolutional Networks"',
-                '"Inductive Representation Learning on Large Graphs"',
-                '"Graph Attention Networks"',
-                '"Neural Message Passing for Quantum Chemistry"',
-                '"How Powerful are Graph Neural Networks"',
-                "Graphormer graph transformer",
-                "graph neural networks survey message passing",
-                "graph transformers survey",
             ]
         return []
 
@@ -370,6 +359,7 @@ class LiteratureRetrievalSkill:
                     citation_count=0,
                     source="arxiv",
                     venue=venue,
+                    external_ids={"ArXiv": self._strip_arxiv_version(paper_id)} if paper_id else {},
                 ))
         except Exception as e:
             print(f"[arXiv] Query '{query}' failed: {e}")
@@ -457,6 +447,7 @@ class LiteratureRetrievalSkill:
                     references=refs,
                     source="openalex",
                     venue=venue,
+                    external_ids=self._openalex_external_ids(paper_id, doi),
                 ))
         except Exception as e:
             print(f"[OpenAlex] Query '{query[:50]}' failed: {e}")
@@ -484,9 +475,10 @@ class LiteratureRetrievalSkill:
         relevance_profile = self._build_relevance_profile(topic, query_plan)
         if relevance_profile["phrases"] or relevance_profile["acronyms"] or relevance_profile["exact_titles"]:
             filtered = []
+            has_strict_anchor = bool(relevance_profile.get("strict_phrases") or relevance_profile.get("strict_acronyms"))
             for p in papers:
                 key = p.paper_id or hashlib.md5(p.title.encode()).hexdigest()[:12]
-                if key in broad_keys:
+                if key in broad_keys and not has_strict_anchor:
                     filtered.append(p)
                     continue
                 if self._matches_relevance_profile(p, relevance_profile):
@@ -551,12 +543,6 @@ class LiteratureRetrievalSkill:
         if ("vision" in topic_lower or "image" in topic_lower or "vit" in topic_lower) and "transformer" in topic_lower:
             return self._filter_vision_transformer_relevance(papers)
 
-        if "retrieval-augmented" in topic_lower or "retrieval augmented" in topic_lower or re.search(r"(?<![a-z0-9])rag(?![a-z0-9])", topic_lower):
-            return self._filter_rag_relevance(papers)
-
-        if ("graph neural" in topic_lower or "gnn" in topic_lower or "graph transformer" in topic_lower) and "graph" in topic_lower:
-            return self._filter_gnn_relevance(papers)
-
         if not ("counterfactual" in topic_lower and ("regret" in topic_lower or "cfr" in topic_lower)):
             relevance_profile = self._build_relevance_profile(topic, query_plan)
             if not (relevance_profile["phrases"] or relevance_profile["acronyms"]):
@@ -586,97 +572,65 @@ class LiteratureRetrievalSkill:
                 filtered.append(p)
         return filtered
 
-    def _filter_rag_relevance(self, papers: list[Paper]) -> list[Paper]:
-        required_phrases = [
-            "retrieval-augmented generation",
-            "retrieval augmented generation",
-            "retrieval-augmented large language",
-            "retrieval augmented large language",
-            "retrieval-enhanced",
-            "retrieval enhanced",
-            "dense passage retrieval",
-            "open-domain question answering",
-            "knowledge-intensive nlp",
-            "fusion-in-decoder",
-            "self-rag",
-            "agentic rag",
-            "retrieval augmented",
-        ]
-        acronym_terms = ["rag", "dpr", "fid", "retro", "atlas"]
-        support_terms = [
-            "retriever",
-            "retrieval",
-            "question answering",
-            "large language model",
-            "large language models",
-            "llm",
-            "llms",
-            "knowledge base",
-            "external knowledge",
-            "grounded generation",
-        ]
-        filtered = []
-        for p in papers:
-            text = f" {p.title} {p.abstract} ".lower()
-            has_phrase = any(term in text for term in required_phrases)
-            has_acronym = any(
-                re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", text)
-                for term in acronym_terms
-            )
-            support_hits = sum(1 for term in support_terms if term in text)
-            if has_phrase or has_acronym or support_hits >= 2:
-                filtered.append(p)
-        return filtered if len(filtered) >= min(8, max(3, len(papers) // 5)) else papers
+    def rank_by_relevance_quality(
+        self,
+        papers: list[Paper],
+        topic: str,
+        query_plan: Optional[dict] = None,
+    ) -> list[Paper]:
+        relevance_profile = self._build_relevance_profile(topic, query_plan)
+        max_citations = max((p.citation_count for p in papers), default=1)
 
-    def _filter_gnn_relevance(self, papers: list[Paper]) -> list[Paper]:
-        exact_or_phrase = [
-            "graph neural network",
-            "graph neural networks",
-            "graph convolutional network",
-            "graph convolutional networks",
-            "graph attention network",
-            "graph attention networks",
-            "graphsage",
-            "graph transformer",
-            "graphormer",
-            "message passing neural network",
-            "message passing neural networks",
-            "neural message passing",
-            "weisfeiler",
-            "geometric deep learning",
-            "inductive representation learning on large graphs",
-            "semi-supervised classification with graph convolutional networks",
-        ]
-        acronym_terms = ["gcn", "gat", "gnn", "gnns", "mpnn"]
-        negative_terms = [
-            "fluid",
-            "fluids",
-            "genomics",
-            "genomic",
-            "molecule as processes",
-            "cellular automata",
-            "radial basis",
-            "order types",
-        ]
-        filtered = []
-        for p in papers:
-            text = f" {p.title} {p.abstract} ".lower()
-            if any(term in text for term in negative_terms) and not any(term in text for term in exact_or_phrase):
-                continue
-            has_phrase = any(term in text for term in exact_or_phrase)
-            has_acronym = any(
-                re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", text)
-                for term in acronym_terms
+        def score(paper: Paper) -> tuple[float, int, int, int]:
+            title = paper.title or ""
+            abstract = paper.abstract or ""
+            text = f" {title} {abstract} ".lower()
+            normalized = self._normalize_title(text)
+            title_norm = self._normalize_title(title)
+            relevance = 0.0
+            if self._matches_strict_topic_anchor(text, normalized, relevance_profile):
+                relevance += 100.0
+            if self._matches_relevance_profile(paper, {**relevance_profile, "strict_phrases": [], "strict_acronyms": []}):
+                relevance += 30.0
+            for phrase in relevance_profile.get("phrases", []):
+                if phrase in title_norm:
+                    relevance += 8.0
+                elif phrase in normalized:
+                    relevance += 3.0
+            for acronym in relevance_profile.get("strict_acronyms", []) + relevance_profile.get("acronyms", []):
+                if re.search(rf"(?<![a-z0-9]){re.escape(acronym)}(?![a-z0-9])", title.lower()):
+                    relevance += 10.0
+                elif re.search(rf"(?<![a-z0-9]){re.escape(acronym)}(?![a-z0-9])", text):
+                    relevance += 4.0
+            citation_factor = paper.citation_count / max(max_citations, 1)
+            metadata = int(bool(paper.abstract)) + int(bool(paper.references or paper.citations)) + int(paper.citation_count > 0)
+            return (
+                relevance + 8.0 * citation_factor + metadata,
+                paper.citation_count,
+                paper.year,
+                len(abstract),
             )
-            graph_hits = sum(1 for term in ["graph", "node", "edge", "message passing", "representation learning"] if term in text)
-            if has_phrase or has_acronym or graph_hits >= 3:
-                filtered.append(p)
-        return filtered if len(filtered) >= min(8, max(3, len(papers) // 5)) else papers
+
+        return sorted(papers, key=score, reverse=True)
+
+    def prune_current_corpus(self, max_papers: int, query_plan: Optional[dict] = None) -> list[Paper]:
+        profile = self.data.get_research_profile()
+        if not profile:
+            return self.data.get_all_papers()
+        papers = self.rank_by_relevance_quality(self.data.get_all_papers(), profile.topic, query_plan)
+        if max_papers > 0:
+            papers = papers[:max_papers]
+        self.data.clear_papers()
+        self.data.add_papers(papers)
+        self.data.set_corpus_quality(self._assess_corpus_quality(papers))
+        return papers
 
     def _build_relevance_profile(self, topic: str, query_plan: Optional[dict] = None) -> dict:
         query_plan = query_plan or self.data.get_metadata("query_plan") or {}
         raw_terms: list[str] = []
         exact_titles: list[str] = []
+        strict_phrases: list[str] = []
+        strict_acronyms: list[str] = []
 
         for key in [
             "positive_terms",
@@ -697,6 +651,18 @@ class LiteratureRetrievalSkill:
 
         raw_terms.append(topic)
         raw_terms.extend(self._get_landmark_queries(topic))
+        topic_anchor = self._extract_parenthetical_topic_anchor(topic)
+        if topic_anchor:
+            expanded, acronym = topic_anchor
+            strict_phrases.append(expanded)
+            strict_acronyms.append(acronym)
+            raw_terms.extend([expanded, acronym])
+        planned_acronyms = self._extract_planned_acronyms(raw_terms)
+        if planned_acronyms:
+            strict_acronyms.extend(planned_acronyms)
+            compact_topic = self._compact_topic_phrase(topic)
+            if compact_topic:
+                strict_phrases.append(compact_topic)
 
         STOP = {
             "research", "trail", "field", "learning", "model", "models", "method", "methods",
@@ -738,6 +704,8 @@ class LiteratureRetrievalSkill:
             "acronyms": list(dict.fromkeys(acronyms)),
             "token_groups": token_groups,
             "exact_titles": list(dict.fromkeys(self._normalize_title(t) for t in exact_titles if t)),
+            "strict_phrases": list(dict.fromkeys(self._normalize_title(t) for t in strict_phrases if t)),
+            "strict_acronyms": list(dict.fromkeys(a.lower() for a in strict_acronyms if a)),
         }
 
     def _matches_relevance_profile(self, paper: Paper, relevance_profile: dict) -> bool:
@@ -748,6 +716,9 @@ class LiteratureRetrievalSkill:
         for exact in relevance_profile.get("exact_titles", []):
             if exact and (exact in title_key or title_key in exact):
                 return True
+
+        if relevance_profile.get("strict_phrases") or relevance_profile.get("strict_acronyms"):
+            return self._matches_strict_topic_anchor(text, normalized_text, relevance_profile)
 
         for phrase in relevance_profile.get("phrases", []):
             if phrase in normalized_text or phrase.replace(" ", "-") in text:
@@ -760,6 +731,57 @@ class LiteratureRetrievalSkill:
         paper_tokens = set(re.findall(r"[a-z0-9][a-z0-9\-]{2,}", normalized_text))
         for group in relevance_profile.get("token_groups", []):
             if len(group) >= 3 and len(group & paper_tokens) >= 2:
+                return True
+        return False
+
+    @staticmethod
+    def _extract_parenthetical_topic_anchor(topic: str) -> tuple[str, str] | None:
+        match = re.search(r"([A-Za-z][A-Za-z0-9\-\s]{2,}?)\s*\(([A-Za-z][A-Za-z0-9]{1,12})\)", topic)
+        if not match:
+            return None
+        expanded = re.sub(r"\s+", " ", match.group(1)).strip()
+        acronym = match.group(2).strip().lower()
+        if not expanded or len(acronym) < 2:
+            return None
+        # Keep the technical phrase closest to the acronym; this avoids making
+        # trailing descriptors such as "networks" mandatory.
+        expanded_tokens = expanded.split()
+        expanded = " ".join(expanded_tokens[-6:])
+        return expanded.lower(), acronym
+
+    @staticmethod
+    def _extract_planned_acronyms(terms: list[str]) -> list[str]:
+        acronyms = []
+        for term in terms:
+            for token in re.findall(r"\b[A-Z][A-Z0-9]{1,12}\b", term or ""):
+                if token not in {"AI", "ML", "NLP"}:
+                    acronyms.append(token.lower())
+        return list(dict.fromkeys(acronyms))
+
+    @staticmethod
+    def _compact_topic_phrase(topic: str) -> str:
+        topic = re.sub(r"\([^)]*\)", " ", topic or "")
+        topic = re.split(r"[/,:;]", topic)[0]
+        stop_suffixes = {
+            "network", "networks", "model", "models", "architecture", "architectures",
+            "application", "applications", "method", "methods", "algorithm", "algorithms",
+            "system", "systems",
+        }
+        tokens = [
+            tok for tok in re.findall(r"[a-z0-9][a-z0-9\-]{2,}", topic.lower())
+            if tok not in stop_suffixes
+        ]
+        if len(tokens) < 2:
+            return ""
+        return " ".join(tokens[-6:])
+
+    @staticmethod
+    def _matches_strict_topic_anchor(text: str, normalized_text: str, relevance_profile: dict) -> bool:
+        for phrase in relevance_profile.get("strict_phrases", []):
+            if phrase and phrase in normalized_text:
+                return True
+        for acronym in relevance_profile.get("strict_acronyms", []):
+            if acronym and re.search(rf"(?<![a-z0-9]){re.escape(acronym)}(?![a-z0-9])", text):
                 return True
         return False
 
@@ -877,6 +899,7 @@ class LiteratureRetrievalSkill:
             result = self._lookup_semantic_scholar_paper(paper, headers)
             if not result:
                 continue
+            self._merge_external_ids(paper, self._semantic_scholar_external_ids(result))
             citation_count = result.get("citationCount")
             if isinstance(citation_count, int) and citation_count >= paper.citation_count:
                 paper.citation_count = citation_count
@@ -991,20 +1014,6 @@ class LiteratureRetrievalSkill:
 
     def _ensure_curated_landmarks(self, papers: list[Paper], topic: str) -> list[Paper]:
         topic_lower = topic.lower()
-        if ("graph neural" in topic_lower or "gnn" in topic_lower or "graph transformer" in topic_lower) and "graph" in topic_lower:
-            return self._ensure_verified_arxiv_landmarks(papers, [
-                "Semi-Supervised Classification with Graph Convolutional Networks",
-                "Inductive Representation Learning on Large Graphs",
-                "Graph Attention Networks",
-                "Neural Message Passing for Quantum Chemistry",
-                "How Powerful are Graph Neural Networks",
-            ])
-        if "retrieval-augmented" in topic_lower or "retrieval augmented" in topic_lower or re.search(r"(?<![a-z0-9])rag(?![a-z0-9])", topic_lower):
-            return self._ensure_verified_arxiv_landmarks(papers, [
-                "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
-                "Dense Passage Retrieval for Open-Domain Question Answering",
-                "Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection",
-            ])
         if not (("vision" in topic_lower or "image" in topic_lower or "vit" in topic_lower) and "transformer" in topic_lower):
             return papers
 
@@ -1029,25 +1038,6 @@ class LiteratureRetrievalSkill:
                 venue=pdata.get("venue", ""),
             ))
         self._link_curated_references(papers)
-        return papers
-
-    def _ensure_verified_arxiv_landmarks(self, papers: list[Paper], landmark_titles: list[str]) -> list[Paper]:
-        existing_titles = {self._normalize_title(p.title) for p in papers}
-        for title in landmark_titles:
-            target = self._normalize_title(title)
-            if any(target in existing or existing in target for existing in existing_titles):
-                continue
-            candidates = self._search_arxiv(f'"{title}"', 5)
-            match = None
-            for candidate in candidates:
-                candidate_key = self._normalize_title(candidate.title)
-                if target in candidate_key or candidate_key in target:
-                    match = candidate
-                    break
-            if match:
-                match.source = "arxiv_verified_landmark"
-                papers.append(match)
-                existing_titles.add(self._normalize_title(match.title))
         return papers
 
     def _repair_curated_metadata(self, papers: list[Paper], title_key: str, pdata: dict) -> None:
@@ -1094,6 +1084,10 @@ class LiteratureRetrievalSkill:
                 match = self._best_title_match(paper.title, results)
                 if not match:
                     continue
+                self._merge_external_ids(
+                    paper,
+                    self._openalex_external_ids(match.get("id", "").split("/")[-1], ""),
+                )
                 cited_by = match.get("cited_by_count", 0) or 0
                 paper.citation_count = max(paper.citation_count, cited_by)
                 if cited_by and paper.citation_count == cited_by:
@@ -1104,6 +1098,48 @@ class LiteratureRetrievalSkill:
             except Exception as e:
                 print(f"[OpenAlex] Title citation lookup failed for '{paper.title[:50]}': {e}")
             time.sleep(0.1)
+
+    @staticmethod
+    def _strip_arxiv_version(value: str) -> str:
+        return re.sub(r"v\d+$", "", value or "").strip()
+
+    @staticmethod
+    def _openalex_external_ids(openalex_id: str, doi: str = "") -> dict[str, str]:
+        ids = {}
+        if openalex_id:
+            ids["OpenAlex"] = openalex_id.split("/")[-1]
+        if doi:
+            ids["DOI"] = doi.lower().replace("https://doi.org/", "")
+        return ids
+
+    def _semantic_scholar_external_ids(self, result: dict) -> dict[str, str]:
+        ids = {}
+        if result.get("paperId"):
+            ids["SemanticScholar"] = result["paperId"]
+        external = result.get("externalIds") or {}
+        if isinstance(external, dict):
+            for key, value in external.items():
+                if not value:
+                    continue
+                if key.lower() == "arxiv":
+                    ids["ArXiv"] = self._strip_arxiv_version(str(value))
+                elif key.lower() == "doi":
+                    ids["DOI"] = str(value).lower().replace("https://doi.org/", "")
+                elif key.lower() == "openalex":
+                    ids["OpenAlex"] = str(value).split("/")[-1]
+                else:
+                    ids[key] = str(value)
+        return ids
+
+    @staticmethod
+    def _merge_external_ids(paper: Paper, ids: dict[str, str]) -> None:
+        if not ids:
+            return
+        merged = dict(paper.external_ids or {})
+        for key, value in ids.items():
+            if value:
+                merged[key] = value
+        paper.external_ids = merged
 
     def _best_title_match(self, title: str, results: list[dict]) -> Optional[dict]:
         wanted = self._normalize_title(title)
@@ -1152,6 +1188,7 @@ class LiteratureRetrievalSkill:
         papers = self._filter_topic_specific_relevance(papers, profile.topic, query_plan=query_plan)
         papers = self._filter_exclude_terms(papers, query_plan.get("exclude_terms", []))
         papers = self._enrich_citations(papers, max_papers)
+        papers = self.rank_by_relevance_quality(papers, profile.topic, query_plan)[: max(8, max_papers // 2)]
         self.data.add_papers(papers)
         all_papers = self.data.get_all_papers()
         quality = self._assess_corpus_quality(all_papers)

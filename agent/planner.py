@@ -34,6 +34,7 @@ class AgentPlanner:
         llm_model: str = DEFAULT_MODEL,
         output_dir: str = ".",
         max_papers_override: int | None = None,
+        similarity_backend: str = "tfidf",
     ):
         self.data = SharedDataLayer()
         self.state = PlannerState.IDLE
@@ -41,6 +42,7 @@ class AgentPlanner:
         self.llm_mode = llm_mode
         self.output_dir = output_dir
         self.max_papers_override = max_papers_override
+        self.similarity_backend = similarity_backend
         llm_enabled = llm_mode != "off"
         self.llm = LLMClient(enabled=llm_enabled, provider=llm_provider, model=llm_model)
 
@@ -216,11 +218,11 @@ class AgentPlanner:
         n_papers = len(papers)
 
         # Step 3: Corpus quality check and adaptive retrieval
-        if n_papers < 30:
+        if n_papers < 30 and not self.demo:
             output.append(f"Only {n_papers} papers found. Expanding search...")
-            for expansion_query in self._adaptive_expansion_queries(profile.topic)[:3]:
+            for expansion_query in self._adaptive_expansion_queries(profile.topic, query_plan)[:3]:
                 self.retrieval.expand_retrieval(expansion_query, 30)
-            papers = self.data.get_all_papers()
+            papers = self.retrieval.prune_current_corpus(profile.max_papers, query_plan)
             n_papers = len(papers)
 
         quality = self.data.get_corpus_quality()
@@ -231,10 +233,11 @@ class AgentPlanner:
 
         # Step 3: Build graph
         output.append(f"## Step 3: Building research graph\n")
-        graph_data = self.graph_builder.build()
+        graph_data = self.graph_builder.build(similarity_backend=self.similarity_backend)
         graph_metrics = self.data.get_metadata("graph_metrics") or {}
         output.append(f"Nodes: {graph_metrics.get('node_count', len(graph_data.nodes))}")
         output.append(f"Edges: {graph_metrics.get('edge_count', len(graph_data.edges))}")
+        output.append(f"Similarity backend: {graph_metrics.get('similarity_backend', self.similarity_backend)}")
         n_citation = graph_metrics.get("citation_edges", sum(1 for e in graph_data.edges if e.type == "citation"))
         n_similarity = graph_metrics.get("similarity_edges", sum(1 for e in graph_data.edges if e.type == "similarity"))
         output.append(f"Citation edges: {n_citation}, Similarity edges: {n_similarity}\n")
@@ -303,7 +306,7 @@ class AgentPlanner:
 
         return "\n".join(output)
 
-    def _adaptive_expansion_queries(self, topic: str) -> list[str]:
+    def _adaptive_expansion_queries(self, topic: str, query_plan: Optional[dict] = None) -> list[str]:
         topic_lower = topic.lower()
         if "counterfactual" in topic_lower and ("regret" in topic_lower or "cfr" in topic_lower):
             return [
@@ -321,7 +324,51 @@ class AgentPlanner:
                 "masked autoencoder",
                 "hierarchical vision transformer",
             ]
+        anchors = self._expansion_anchors(topic, query_plan)
+        if anchors:
+            queries = []
+            for anchor in anchors[:2]:
+                queries.extend([
+                    f"{anchor} survey",
+                    f"{anchor} architecture",
+                    f"{anchor} tutorial",
+                    f"{anchor} applications",
+                ])
+            return self._dedupe(queries)
         return ["survey", "algorithm", "applications"]
+
+    @staticmethod
+    def _expansion_anchors(topic: str, query_plan: Optional[dict]) -> list[str]:
+        anchors = []
+        match = re.search(r"([A-Za-z][A-Za-z0-9\-\s]{2,}?)\s*\(([A-Za-z][A-Za-z0-9]{1,12})\)", topic)
+        if match:
+            anchors.append(match.group(2))
+            anchors.append(re.sub(r"\s+", " ", match.group(1)).strip())
+        if query_plan:
+            for key in ("main_queries", "alias_queries", "positive_terms"):
+                for term in query_plan.get(key, []) or []:
+                    if not isinstance(term, str):
+                        continue
+                    for acronym in re.findall(r"\b[A-Z][A-Z0-9]{1,12}\b", term):
+                        if acronym not in {"AI", "ML", "NLP"}:
+                            anchors.append(acronym)
+                    cleaned = re.sub(r"[^A-Za-z0-9\-\s]", " ", term)
+                    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+                    if 2 <= len(cleaned.split()) <= 5:
+                        anchors.append(cleaned)
+        return AgentPlanner._dedupe(anchors)
+
+    @staticmethod
+    def _dedupe(items: list[str]) -> list[str]:
+        seen = set()
+        out = []
+        for item in items:
+            key = item.lower().strip()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            out.append(item)
+        return out
 
     def _llm_query_plan(self, profile: ResearchProfile) -> Optional[dict]:
         if self.llm_mode == "off" or not self.llm.available():

@@ -284,61 +284,6 @@ class ReadingPathSkill:
                 "BEiT: BERT Pre-Training of Image Transformers",
             ]:
                 self._prepend_matching_title(papers, key_development_ids, [title], max_len=6)
-        if "retrieval-augmented" in topic or "retrieval augmented" in topic or re.search(r"(?<![a-z0-9])rag(?![a-z0-9])", topic):
-            self._prepend_matching_title(
-                papers,
-                foundation_ids,
-                [
-                    "Dense Passage Retrieval for Open-Domain Question Answering",
-                    "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
-                ],
-                max_len=3,
-            )
-            self._prepend_matching_title(
-                papers,
-                core_ids,
-                [
-                    "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
-                    "Fusion-in-Decoder",
-                    "On Single and Multiple Representations in Dense Passage Retrieval",
-                ],
-                max_len=3,
-            )
-            for title in [
-                "Self-RAG",
-                "Agentic Retrieval-Augmented Generation",
-                "A Survey on RAG Meeting LLMs",
-                "Retrieval-Augmented Generation for Large Language Models",
-            ]:
-                self._prepend_matching_title(papers, key_development_ids, [title], max_len=6)
-        if ("graph neural" in topic or "gnn" in topic or "graph transformer" in topic) and "graph" in topic:
-            self._prepend_matching_title(
-                papers,
-                foundation_ids,
-                [
-                    "Semi-Supervised Classification with Graph Convolutional Networks",
-                    "Inductive Representation Learning on Large Graphs",
-                    "Neural Message Passing for Quantum Chemistry",
-                ],
-                max_len=3,
-            )
-            self._prepend_matching_title(
-                papers,
-                core_ids,
-                [
-                    "Graph Attention Networks",
-                    "How Powerful are Graph Neural Networks",
-                    "Neural Message Passing for Quantum Chemistry",
-                ],
-                max_len=3,
-            )
-            for title in [
-                "Graphormer",
-                "Graph Transformer",
-                "Transformers are Graph Neural Networks",
-                "A Generalization of Transformer Networks to Graphs",
-            ]:
-                self._prepend_matching_title(papers, key_development_ids, [title], max_len=6)
 
     @staticmethod
     def _prepend_matching_title(

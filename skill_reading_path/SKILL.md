@@ -1,97 +1,65 @@
 ---
 name: reading-path-report
-description: "Generate personalized research reading paths, evidence-grounded explanations, Markdown reports, and visualizations from graph analysis results."
-author: LiYian2
+description: "Generate personalized research reading paths and evidence-grounded reports from graph analysis results."
+author: researchtrail-team
 version: 1.0.0
 tags:
+  - social-network-analysis
   - reading-path
   - report-generation
   - evidence-grounded-explanation
   - visualization
-  - research-agent
-metadata:
-  openclaw:
-    requires:
-      env:
-        - SILICON_FLOW_API
-      bins:
-        - python
 ---
 
 # Reading Path and Report Skill
 
-You are helping the ResearchTrail agent turn graph analysis results into an actionable reading path and human-readable report.
-
 ## When to Use
-
-Use this skill after papers have been retrieved and graph scores have been computed, especially when the user asks for:
-
-- a reading list or reading path
-- a 7-day study plan
-- bridge paper explanations
-- field map or community summary
-- a Markdown report with figures
-- follow-up explanations grounded in retrieved evidence
-
-Do not use this skill to retrieve papers or recompute graph centrality.
-
-## How to Run
-
-Preferred full-agent command:
-
-```bash
-python main.py "<user research goal>" --llm auto --max-papers 45 --output-dir outputs/<run_name>
-```
-
-Reading-path ablation from saved full-agent states:
-
-```bash
-python -m evaluation.reading_path_ablation --state-root outputs/benchmark_full_llm_normalized --output-dir outputs/reading_path_ablation/full_11_topics
-```
-
-GUI demo:
-
-```bash
-python app.py
-```
+Use this Skill after graph analysis has produced paper scores and communities, when the user needs an actionable reading path, report, visualization, or follow-up explanation.
 
 ## Inputs
-
-- User profile.
-- Paper corpus.
-- Graph scores and community labels.
-- Optional LLM explanation writer.
+- User profile from the shared data layer.
+- Paper corpus from the shared data layer.
+- Graph scores and community labels from the Research Graph Analysis Skill.
+- Optional LLM explanation mode: `llm`, `rule`, or `off`.
 
 ## Procedure
-
-1. Select prerequisite, foundation, core, bridge, and frontier papers using graph scores and user level.
-2. Arrange papers into staged reading order.
-3. Create evidence packets for each paper.
-4. If LLM is available, generate concise why-read explanations from evidence only.
-5. Generate `research_report.md`, `research_graph.png`, `scores_distribution.png`, and `state.json`.
-6. Add follow-up suggestions such as bridge explanations and study-plan requests.
+1. Select prerequisite, foundation, core, bridge, and frontier papers by deterministic graph scores.
+2. Arrange papers into stages according to user level and learning goal.
+3. Create evidence packets for each recommended paper.
+4. Optionally ask the LLM to turn evidence packets into concise, grounded explanations.
+5. Generate markdown report, graph visualization, score distribution, follow-up suggestions, and evaluation metrics.
 
 ## Outputs
-
-- Staged reading path.
-- Paper-level abstract, URL, role scores, and why-read explanation.
+- Personalized reading path with stages and paper reasons.
+- Evidence packets for recommended papers.
 - Markdown report.
 - Network and score visualizations.
-- Follow-up suggestions.
+- Follow-up answers such as bridge-paper explanations and 7-day reading plans.
 
-## Error Handling
+## Evaluation Protocol
+- Compare network-aware reading paths against a citation-count baseline.
+- Record stage count, unique paper count, role counts, explanation coverage, landmark hit rate, topic precision, ordering quality, community coverage, and stage coverage.
+- For human evaluation, rate coherence, coverage, level appropriateness, and explanation usefulness from 1 to 5.
+- Verify that each recommended paper includes authors, year, source URL when available, abstract, and an evidence-grounded why-read explanation.
 
+## Current Evaluation Artifacts
+- `outputs/evaluation/skill_reading_path_report.md`
+- `outputs/reading_path_ablation/full_11_topics/reading_path_ablation_summary.md`
+- `outputs/reading_path_ablation/full_11_topics/reading_path_ablation_results.json`
+- `outputs/reading_path_ablation/full_11_topics/paths_for_human_eval/`
+- `outputs/report_materials/final_evaluation_and_implementation_summary.md`
+
+## Known Limitations
+- Why-read explanations are only as reliable as the retrieved metadata and abstract.
+- Citation-count baselines use labeled citation sources: Semantic Scholar, OpenAlex, or curated metadata. Counts may differ from Google Scholar.
+- Topic-specific landmark support is transparent in source mix and quality metrics. It should be evaluated with ablations when strict generalization is the main claim.
+
+## Failure Handling
 - If LLM explanation fails, use deterministic template explanations.
-- If graph scores are missing, ask the agent to run Research Graph Analysis first.
-- If visualization fails, still return the Markdown report and state file.
-- If abstracts are missing, still include URL/title/authors/year and explain that metadata was incomplete.
-
-## Evaluation Evidence
-
-See `docs/evaluation.md`. The reading-path ablation compares random order, citation-count order, PageRank order, and ResearchTrail staged paths.
+- If no graph scores exist, ask the Agent to run graph analysis first.
+- If visualization fails, still return the report and reading path.
 
 ## Do Not
-
-- Do not invent claims that are absent from the evidence packet.
-- Do not cite papers that are not in the corpus.
-- Do not overwrite graph scores.
+- Do not retrieve papers.
+- Do not recompute graph centrality.
+- Do not invent facts not present in the evidence packet.

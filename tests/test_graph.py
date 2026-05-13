@@ -41,6 +41,52 @@ class TestGraphBuilder:
         gd = gb.build()
         sim_edges = [e for e in gd.edges if e.type == "similarity"]
         assert len(sim_edges) >= 1
+        assert dl.get_metadata("similarity_backend") == "tfidf"
+
+    def test_build_lsa_similarity_edges(self):
+        dl = SharedDataLayer()
+        papers = [
+            Paper(paper_id="p1", title="Graph Convolutional Networks", authors=["X"], year=2017,
+                  abstract="graph neural networks with spectral graph convolution for semi supervised node classification"),
+            Paper(paper_id="p2", title="Graph Attention Networks", authors=["Y"], year=2018,
+                  abstract="graph neural networks with attention mechanisms for node classification on citation networks"),
+            Paper(paper_id="p3", title="Transformers for Images", authors=["Z"], year=2020,
+                  abstract="vision transformers use self attention for image recognition and visual representation learning"),
+        ]
+        dl.add_papers(papers)
+        gb = GraphBuilder(dl)
+        gd = gb.build(mode="similarity", similarity_backend="lsa")
+        sim_edges = [e for e in gd.edges if e.type == "similarity"]
+        assert len(sim_edges) >= 1
+        assert dl.get_metadata("similarity_backend") in {"lsa", "tfidf"}
+        assert all(e.distance > 0 for e in sim_edges)
+
+    def test_build_citation_edges_with_external_aliases(self):
+        dl = SharedDataLayer()
+        papers = [
+            Paper(
+                paper_id="openalex:W1",
+                title="New Method",
+                authors=["X"],
+                year=2022,
+                abstract="new method extending a known arxiv paper",
+                references=["1811.00164"],
+            ),
+            Paper(
+                paper_id="arxiv:1811.00164",
+                title="Deep Counterfactual Regret Minimization",
+                authors=["Y"],
+                year=2018,
+                abstract="counterfactual regret minimization with deep neural networks",
+                external_ids={"arxiv": "1811.00164"},
+            ),
+        ]
+        dl.add_papers(papers)
+        gd = GraphBuilder(dl).build(mode="citation")
+        assert any(
+            e.source == "openalex:W1" and e.target == "arxiv:1811.00164" and e.type == "citation"
+            for e in gd.edges
+        )
 
     def test_to_networkx(self):
         dl = SharedDataLayer()

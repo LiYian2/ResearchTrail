@@ -33,6 +33,7 @@ def run_researchtrail(
     goal: str,
     max_papers: int,
     llm_mode: str,
+    similarity_backend: str,
     demo_mode: bool,
 ) -> tuple[str, str, str, Any, str, str | None, str | None, dict]:
     topic = (topic or "").strip()
@@ -58,6 +59,7 @@ def run_researchtrail(
         llm_model=DEFAULT_MODEL,
         output_dir=str(output_dir),
         max_papers_override=int(max_papers),
+        similarity_backend=similarity_backend,
     )
     agent.demo = bool(demo_mode)
 
@@ -176,6 +178,7 @@ def _status_markdown(agent: AgentPlanner, output_dir: Path) -> str:
         f"- Output directory: `{output_dir}`",
         f"- Papers retrieved: **{quality.get('total_papers', 0)}**",
         f"- Communities: **{graph.get('community_count', 0)}**",
+        f"- Similarity backend: **{graph.get('similarity_backend', 'tfidf')}**",
         f"- Reading path papers: **{path.get('unique_paper_count', 0)}**",
         f"- Planner mode: **{agent.data.get_metadata('planner_mode') or 'unknown'}**",
     ])
@@ -196,6 +199,7 @@ def _metrics_html(state: dict) -> str:
         ("Edges", graph.get("edge_count", 0)),
         ("Citation Edges", graph.get("citation_edges", 0)),
         ("Similarity Edges", graph.get("similarity_edges", 0)),
+        ("Similarity Backend", graph.get("similarity_backend", "tfidf")),
         ("Communities", graph.get("community_count", 0)),
         ("Path Stages", path.get("stage_count", 0)),
         ("Path Papers", path.get("unique_paper_count", 0)),
@@ -416,6 +420,7 @@ with gr.Blocks(title="ResearchTrail Demo") as demo:
         )
         max_papers = gr.Slider(20, 120, value=45, step=5, label="Max papers")
         llm_mode = gr.Radio(["auto", "off"], value="auto", label="LLM mode")
+        similarity_backend = gr.Radio(["tfidf", "lsa"], value="tfidf", label="Similarity backend")
         demo_mode = gr.Checkbox(value=False, label="Demo mode")
 
     goal = gr.Textbox(
@@ -442,7 +447,7 @@ with gr.Blocks(title="ResearchTrail Demo") as demo:
 
     run_button.click(
         run_researchtrail,
-        inputs=[topic, user_level, goal, max_papers, llm_mode, demo_mode],
+        inputs=[topic, user_level, goal, max_papers, llm_mode, similarity_backend, demo_mode],
         outputs=[status, metrics_html, reading_html, read_selector, report_md, graph_image, score_image, state],
     )
     read_selector.change(update_reading_list, inputs=[read_selector, state], outputs=reading_html)

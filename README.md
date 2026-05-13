@@ -1,8 +1,8 @@
 # ResearchTrail
 
-**ResearchTrail: A Citation-Network Agent for Personalized Research Reading Paths**
+**ResearchTrail: A citation- and similarity-network agent for personalized research reading paths**
 
-ResearchTrail helps a user enter a new research field from a natural-language goal. It retrieves relevant papers, constructs citation and semantic-similarity networks, identifies foundational, bridge, and frontier papers, and generates a personalized reading path with explanations and visualizations.
+ResearchTrail helps a user enter a new research field from a natural-language goal. It retrieves relevant papers, constructs citation and semantic-similarity networks, identifies foundational, bridge, and frontier papers, and generates a personalized reading path with abstracts, URLs, evidence-grounded explanations, and visualizations.
 
 Repository for StudyClawHub submission:
 
@@ -27,15 +27,17 @@ User learning goal
   -> Report, figures, state file, and follow-up suggestions
 ```
 
-LLMs are used only for flexible semantic work: intent parsing, query normalization, community labels, and evidence-grounded explanations. Deterministic code handles retrieval, deduplication, graph construction, PageRank, betweenness, community detection, scoring, and evaluation.
+LLMs are used only for flexible semantic work: intent parsing, query normalization, acronym expansion, community labels, and evidence-grounded why-read explanations. Deterministic code handles retrieval, deduplication, graph construction, PageRank, betweenness, community detection, scoring, and evaluation.
+
+The repository also includes a report-personalization layer for external coding/writing agents. `AGENT.md` explains how a tool such as Claude Code, OpenClaw, or Codex may use `MEMORY.md` to polish generated reports for a specific user while preserving paper metadata, graph scores, URLs, abstracts, and limitations.
 
 ## Skills
 
 | Skill | Folder | When the agent should use it | Backend |
 |---|---|---|---|
-| Literature Retrieval | `skill_retrieval/` | User asks to enter, survey, learn, or explore a research topic | arXiv/OpenAlex/Semantic Scholar retrieval and corpus quality checks |
-| Research Graph Analysis | `skill_graph/` | A paper corpus exists and the agent needs field structure or paper roles | citation/similarity graph, PageRank, betweenness, communities |
-| Reading Path and Report | `skill_reading_path/` | Graph scores exist and the user needs a reading list, report, figures, or follow-up explanation | staged path generation, evidence packets, Markdown report, visualizations |
+| Literature Retrieval | `skill_retrieval/` | User asks to enter, survey, learn, or explore a research topic | arXiv/OpenAlex/Semantic Scholar retrieval, topic filtering, verified landmarks, corpus quality checks |
+| Research Graph Analysis | `skill_graph/` | A paper corpus exists and the agent needs field structure or paper roles | directed citation graph, TF-IDF/LSA similarity graph, PageRank, betweenness, communities |
+| Reading Path and Report | `skill_reading_path/` | Graph scores exist and the user needs a reading list, report, figures, or follow-up explanation | staged path generation, evidence packets, Markdown report, visualizations, GUI-ready state |
 
 Each skill has a StudyClawHub-compatible `SKILL.md` that tells an agent when to use the skill, how to invoke the code, and how to handle failures.
 
@@ -56,6 +58,7 @@ python main.py "I am a beginner and want to understand Vision Transformer" \
   --demo \
   --llm off \
   --max-papers 40 \
+  --similarity-backend lsa \
   --output-dir outputs/demo_vit
 ```
 
@@ -70,6 +73,7 @@ python main.py "I want to understand the research trail of diffusion models, fro
   --llm-provider siliconflow \
   --llm-model Pro/zai-org/GLM-4.7 \
   --max-papers 45 \
+  --similarity-backend lsa \
   --output-dir outputs/diffusion_live
 ```
 
@@ -111,6 +115,7 @@ Full evaluation details are in `docs/evaluation.md`.
 |---|---|---|
 | Skill 1 retrieval | arXiv only vs OpenAlex only vs combined vs filtering vs verified landmarks | Combined retrieval + filtering improves graph edge yield from 5.00 to 5.93 and topic precision from 60.6% to 66.6%. |
 | Skill 2 graph | citation-only vs similarity-only vs hybrid | Citation-only is sparse; hybrid reaches 96.9% largest component ratio and 91.4% path community coverage. |
+| Skill 2 similarity backend | TF-IDF vs LSA under the same hybrid graph mode | LSA improves largest component ratio from 91.7% to 93.7%, path community coverage from 87.2% to 89.7%, and foundation landmark hit from 66.7% to 75.0%. |
 | Skill 3 reading path | random vs citation count vs PageRank vs ResearchTrail staged | ResearchTrail is the only variant with high stage coverage, 97.7%, while keeping 95.3% topic precision. |
 
 ## Related Work
@@ -158,6 +163,7 @@ Run evaluation scripts:
 ```bash
 python -m evaluation.corpus_ablation_batch --max-papers 45 --output-dir outputs/corpus_ablation/full_12_topics
 python -m evaluation.graph_ablation --topic diffusion_models --max-papers 30 --output-dir outputs/graph_ablation/diffusion
+python -m evaluation.similarity_backend_ablation --state-root outputs/benchmark_full_llm_normalized --output-dir outputs/similarity_backend_ablation/full_12_topics
 python -m evaluation.benchmark_runner --max-papers 45 --output-dir outputs/benchmark_full_llm_normalized
 ```
 
@@ -166,6 +172,8 @@ python -m evaluation.benchmark_runner --max-papers 45 --output-dir outputs/bench
 ```text
 .
 ├── AGENTS.md
+├── AGENT.md
+├── MEMORY.md
 ├── README.md
 ├── STUDYCLAWHUB_SUBMISSION.md
 ├── main.py

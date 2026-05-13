@@ -7,6 +7,7 @@ This document fixes the report-ready evaluation material for the current Researc
 - Overall 12-topic agent benchmark: `outputs/benchmark_full_llm_normalized/benchmark_summary.md` and `benchmark_results.json`.
 - Skill 1 corpus ablation: `outputs/corpus_ablation/full_12_topics/corpus_ablation_batch_summary.md` and `corpus_ablation_batch_results.json`.
 - Skill 2 graph ablation: `outputs/graph_ablation/full_12_topics/graph_ablation_summary.md` and `graph_ablation_results.json`.
+- Skill 2 similarity backend ablation: `outputs/similarity_backend_ablation/full_12_topics/similarity_backend_ablation_summary.md` and `similarity_backend_ablation_results.json`.
 - Skill 3 reading-path ablation: `outputs/reading_path_ablation/full_11_topics/reading_path_ablation_summary.md`, `reading_path_ablation_results.json`, and `paths_for_human_eval/`.
 - Manual qualitative rubric: `evaluation/manual_quality_rubric.md`.
 
@@ -23,7 +24,7 @@ Interpretation: the full agent is strongest on topic precision, stage coverage, 
 
 Skill 1 turns a research topic and user profile into a graph-ready paper corpus. It uses LLM-assisted query normalization when available, deterministic fallback queries otherwise, arXiv/OpenAlex retrieval, duplicate removal by normalized title, topic filtering, verified landmark recovery, Semantic Scholar citation/reference enrichment, and corpus quality metrics. The latest implementation also uses HTTPS arXiv API calls, global arXiv throttling with retry/backoff, and `S2_API_KEY` when available.
 
-| Variant | Topics | Papers | Raw Records | Duplicates Removed | Abstract Coverage | Citation Metadata | Reference Coverage | Landmark Hit | Topic Precision | Graph Edges | Graph Edge Yield |
+| Variant | Topics | Avg Papers | Avg Raw Records | Avg Duplicates Removed | Abstract Coverage | Citation Metadata | Reference Coverage | Landmark Hit | Topic Precision | Avg Graph Edges | Graph Edge Yield |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | A_arxiv_only | 12 | 26.2 | 28.6 | 2.4 | 100.0% | 51.8% | 52.8% | 72.8% | 75.5% | 172.5 | 6.18 |
 | B_openalex_only | 12 | 32.2 | 40.0 | 7.8 | 88.4% | 100.0% | 93.5% | 70.0% | 31.1% | 98.0 | 3.16 |
@@ -37,7 +38,7 @@ Important nuance: E is not supposed to dominate every metric. It is optimized fo
 
 ## Skill 2: Research Graph Analysis Implementation
 
-Skill 2 builds citation and semantic-similarity graph structure. Citation edges preserve scholarly dependency, while TF-IDF similarity edges recover connectivity when citation/reference metadata is sparse. Analysis computes PageRank on a directed citation graph, undirected/hybrid community structure, betweenness with inverse-distance semantics for weighted similarity edges, Louvain/greedy communities, and foundation/bridge/frontier role scores. LLM is used only for community labels, not for centrality computation.
+Skill 2 builds citation and semantic-similarity graph structure. Citation edges preserve scholarly dependency, while semantic similarity edges recover connectivity when citation/reference metadata is sparse. The production default uses TF-IDF; the Skill also supports an optional LSA backend that turns TF-IDF into normalized low-dimensional vectors with TruncatedSVD, giving an offline embedding-style graph without requiring a large pretrained model. Analysis computes PageRank on a directed citation graph, undirected/hybrid community structure, betweenness with inverse-distance semantics for weighted similarity edges, Louvain/greedy communities, and foundation/bridge/frontier role scores. LLM is used only for community labels, not for centrality computation.
 
 | Mode | Topics | Edges | Components | Largest Component | Modularity | Communities | Path Community Coverage | Bridge Plausibility | Foundation Landmark Hit | Edge Yield |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -48,6 +49,15 @@ Skill 2 builds citation and semantic-similarity graph structure. Citation edges 
 Graph ablation conclusion: citation-only is theoretically clean but too sparse in this dataset, averaging only 7.2 edges and 20.2% largest component ratio. Similarity-only gives strong connectivity, but lacks citation direction. Hybrid is the production choice because it keeps citation evidence while improving largest component ratio to 96.9%, path community coverage to 91.4%, and bridge plausibility to 81.9%.
 
 Secondary average excluding the low-corpus protein run shows the same trend: hybrid reaches 97.7% largest component ratio and 90.6% path community coverage.
+
+Similarity backend ablation, with graph mode fixed as hybrid:
+
+| Backend | Topics | Edges | Similarity Edges | Components | Largest Component | Modularity | Communities | Path Community Coverage | Bridge Plausibility | Foundation Landmark Hit | Edge Yield |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| tfidf | 12 | 69.8 | 62.6 | 2.2 | 91.7% | 0.2663 | 4.5 | 87.2% | 84.5% | 66.7% | 3.02 |
+| lsa | 12 | 70.2 | 63.0 | 2.1 | 93.7% | 0.2462 | 4.7 | 89.7% | 87.4% | 75.0% | 3.01 |
+
+Backend conclusion: LSA modestly improves connectivity, path community coverage, bridge plausibility, and foundation landmark hit. TF-IDF has slightly higher modularity, so the best engineering choice is to expose the backend as a configurable option instead of claiming one backend always dominates.
 
 ## Skill 3: Reading Path and Report Implementation
 
@@ -68,7 +78,7 @@ The agent is a markdown-described, code-backed, LLM-assisted workflow:
 
 1. Agent planner parses the user request, topic, level, and desired output. LLM mode uses SiliconFlow/OpenAI-compatible chat completions with `SILICON_FLOW_API`; fallback mode uses deterministic rules.
 2. Literature Retrieval Skill constructs a corpus through query expansion, retrieval, filtering, deduplication, landmark verification, and metadata enrichment.
-3. Graph Skill builds citation/similarity/hybrid graphs and computes deterministic SNA metrics and paper role scores.
+3. Graph Skill builds citation/similarity/hybrid graphs and computes deterministic SNA metrics and paper role scores. Semantic edges can use TF-IDF or optional LSA embedding-style similarity.
 4. Community labeler optionally uses LLM to name graph communities from evidence packets.
 5. Reading Path Skill creates staged reading paths and evidence-grounded explanations.
 6. Report/visualization layer writes Markdown reports, graph visualizations, score distributions, state files, and GUI-ready outputs.
@@ -77,6 +87,7 @@ The agent is a markdown-described, code-backed, LLM-assisted workflow:
 
 - Skill 1 is robust as a corpus builder because multi-source retrieval plus topic filtering improves precision and graph edge yield without sacrificing landmark recall.
 - Skill 2 is necessary because citation-only metadata is too sparse for many modern topics; the hybrid graph materially improves connectivity and bridge-paper analysis.
+- Optional LSA similarity gives Skill 2 an additional robustness knob: it improves several downstream graph/path metrics on the 12-topic backend ablation while remaining fully offline and reproducible.
 - Skill 3 is necessary because ranking baselines do not provide stage structure; staged reading paths preserve high topicality while adding pedagogical organization.
 - The full system is not just a summarizer: it retrieves papers, builds a research network, assigns structural paper roles, and generates a personalized reading path with visual evidence.
 
@@ -85,6 +96,7 @@ The agent is a markdown-described, code-backed, LLM-assisted workflow:
 - The benchmark landmark lists are curated for evaluation. In the system, verified landmarks are recovered through API metadata and should be described as a recall aid, not as manual insertion of final results.
 - OpenAlex has broad coverage but lower topic precision on some engineering-heavy topics; arXiv is narrower and often cleaner but weaker on citation/reference metadata.
 - Citation metadata remains incomplete for some domains, which is why the hybrid graph is more reliable than citation-only graph construction.
+- LSA is an offline embedding-style backend, not a pretrained scientific embedding model. A sentence-transformer backend is supported as an optional extension, but was not used in the reported 12-topic run because the environment did not include the package/model.
 - The saved 12-topic overall benchmark has a weak protein structure run with only 8 papers; the Skill 1 rerun shows this topic can retrieve a much healthier corpus, so report the original end-to-end protein result as low-confidence or rerun the full agent if time permits.
 - Role scores are still heuristic combinations of network metrics, recency, citation count, and community position. LLM helps explain evidence but does not replace the deterministic scores.
 

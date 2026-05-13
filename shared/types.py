@@ -33,6 +33,7 @@ class Paper:
     source: str = "unknown"
     keywords: list[str] = field(default_factory=list)
     venue: str = ""
+    external_ids: dict[str, str] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -49,6 +50,7 @@ class Paper:
             "source": self.source,
             "keywords": self.keywords,
             "venue": self.venue,
+            "external_ids": self.external_ids,
         }
 
     @classmethod
@@ -67,6 +69,7 @@ class Paper:
             source=data.get("source", "unknown"),
             keywords=data.get("keywords", []),
             venue=data.get("venue", ""),
+            external_ids=data.get("external_ids", {}),
         )
 
 

@@ -58,6 +58,12 @@ def main():
         default=None,
         help="Override maximum retrieved papers",
     )
+    parser.add_argument(
+        "--similarity-backend",
+        choices=["tfidf", "lsa", "sentence-transformer"],
+        default="tfidf",
+        help="Semantic similarity backend for graph edges",
+    )
 
     args = parser.parse_args()
 
@@ -67,6 +73,7 @@ def main():
         llm_model=args.llm_model,
         output_dir=args.output_dir,
         max_papers_override=args.max_papers,
+        similarity_backend=args.similarity_backend,
     )
     agent.demo = args.demo
 

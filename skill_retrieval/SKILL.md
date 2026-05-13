@@ -1,99 +1,72 @@
 ---
 name: literature-retrieval
-description: "Retrieve, enrich, deduplicate, filter, and quality-check academic papers for a user-specified research topic. Use when the agent needs a graph-ready paper corpus."
-author: LiYian2
+description: "Retrieve, enrich, and quality-check academic papers for a user-specified research topic."
+author: researchtrail-team
 version: 1.0.0
 tags:
+  - social-network-analysis
   - literature-retrieval
   - arxiv
   - openalex
   - semantic-scholar
-  - social-network-analysis
-metadata:
-  openclaw:
-    requires:
-      env:
-        - S2_API_KEY
-      bins:
-        - python
+  - query-expansion
 ---
 
 # Literature Retrieval Skill
 
-You are helping the ResearchTrail agent build a reliable paper corpus for downstream citation and similarity graph analysis.
-
 ## When to Use
-
-Use this skill when the user asks to:
-
-- enter, learn, survey, or explore a research field
-- build a reading path for a topic
-- find foundational papers or recent developments
-- prepare a paper corpus before graph/network analysis
-
-Do not use this skill for graph centrality, community detection, or final report writing.
-
-## How to Run
-
-Preferred full-agent invocation from the repository root:
-
-```bash
-python main.py "<user research goal>" --llm auto --llm-provider siliconflow --llm-model Pro/zai-org/GLM-4.7 --max-papers 45 --output-dir outputs/<run_name>
-```
-
-Skill-specific corpus ablation/evaluation:
-
-```bash
-python -m evaluation.corpus_ablation --topic rag --max-papers 30 --output-dir outputs/corpus_ablation/rag
-```
-
-Multi-topic corpus ablation:
-
-```bash
-python -m evaluation.corpus_ablation_batch --max-papers 45 --output-dir outputs/corpus_ablation/full_12_topics
-```
-
-Offline fallback demo:
-
-```bash
-python main.py "I am a beginner and want to understand Vision Transformer" --demo --llm off --max-papers 40 --output-dir outputs/demo_vit
-```
+Use this Skill when the user wants to learn, enter, survey, or explore a research field and the Agent needs a structured paper corpus for downstream network analysis.
 
 ## Inputs
-
 - `topic`: research topic string.
 - `user_level`: `beginner`, `intermediate`, or `advanced`.
-- `max_papers`: maximum paper count.
-- Optional `query_plan`: structured query plan with `main_queries`, `prerequisite_queries`, `exclude_terms`, `expected_communities`, `positive_terms`, `alias_queries`, and verified landmark candidates.
+- `goal`: learning goal, such as `deep_understanding` or `survey`.
+- `time_range`: `all`, `last_year`, `last_3_years`, or `last_5_years`.
+- `max_papers`: maximum corpus size.
+- `query_plan` optional: structured LLM-generated plan with `main_queries`, `prerequisite_queries`, `exclude_terms`, and `expected_communities`.
 
 ## Procedure
-
-1. Normalize or generate a query plan.
-2. Search arXiv and OpenAlex.
-3. Deduplicate papers by normalized title.
-4. Filter by topic relevance, aliases, exact titles, expected communities, and exclude terms.
-5. Recover verified landmarks only when API metadata confirms the paper.
-6. Enrich citation counts and references using Semantic Scholar when `S2_API_KEY` is available; fall back to OpenAlex title matching.
-7. Save paper records and corpus quality metrics to the shared data layer.
+1. Build or receive a structured query plan.
+2. Search arXiv and OpenAlex deterministically.
+3. Deduplicate records by normalized title and preserve richer metadata.
+4. Filter by topic relevance, time range, and optional exclude terms. Topic filtering uses exact landmark titles, LLM/rule query aliases, positive terms, expected communities, and acronym-aware matching instead of broad single-keyword matching.
+5. Enrich records with citation counts and references when available. Prefer Semantic Scholar `citationCount` when `S2_API_KEY` is configured, respecting the 1 request/second API limit; otherwise fall back to OpenAlex and curated landmark metadata.
+6. Save papers and corpus quality metrics to the shared data layer.
 
 ## Outputs
+- Paper corpus in shared data layer.
+- Corpus quality metrics: paper count, abstract coverage, citation/reference coverage, year range, and deduplication count.
+- Query metadata for evaluation and report generation.
 
-- Paper records with title, authors, year, abstract, URL, citation count, citation source, source label, references, and citations.
-- Corpus quality metrics: total papers, abstract coverage, citation metadata coverage, reference coverage, deduplication count, year range.
-- Query metadata for reproducibility and evaluation.
+## Evaluation Protocol
+- Run live retrieval on at least two topics: `Vision Transformer` and `Counterfactual regret minimization`.
+- Compare `rule_only_agent` and `llm_assisted_agent`.
+- Record paper count, abstract coverage, citation/reference coverage, year range, deduplication count, and number of main queries.
+- Record topic precision and source mix so retrieved API papers, curated landmarks, and synthetic demo records are distinguishable.
+- Run the corpus construction ablation with `python -m evaluation.corpus_ablation --topic <benchmark_id_or_topic> --max-papers 45 --output-dir outputs/corpus_ablation/<topic>`.
+- Corpus ablation variants: arXiv only, OpenAlex only, arXiv + OpenAlex, plus topic filtering, plus verified landmark recovery.
+- Corpus ablation metrics: total papers, duplicate removal, abstract coverage, citation metadata coverage, reference coverage, landmark hit rate, topic precision, graph edges, and graph edge yield.
+- Inspect top retrieved papers for topical relevance, especially for ambiguous terms such as `regret` and `counterfactual`.
+- Treat demo mode as a pipeline reliability check only; report-quality experiments must use live arXiv/OpenAlex/Semantic Scholar mode.
 
-## Error Handling
+## Current Evaluation Artifacts
+- `outputs/evaluation/skill_retrieval_report.md`
+- `outputs/corpus_ablation/full_12_topics/corpus_ablation_batch_summary.md`
+- `outputs/corpus_ablation/full_12_topics/corpus_ablation_batch_results.json`
+- `outputs/report_materials/final_evaluation_and_implementation_summary.md`
 
-- If `S2_API_KEY` is missing, continue with OpenAlex and arXiv metadata; report weaker citation/reference coverage.
-- If arXiv returns rate-limit errors, wait and retry; if it still fails, continue with OpenAlex or demo mode.
-- If OpenAlex fails, keep arXiv results and mark metadata coverage as partial.
-- If fewer than 8 papers are found, broaden the query or ask the agent to rerun with a more general topic.
+## Known Limitations
+- Citation counts prefer Semantic Scholar when `S2_API_KEY` is available, then OpenAlex or curated metadata. Counts may still differ from Google Scholar or Google Search snippets.
+- arXiv can rate-limit live experiments; OpenAlex usually remains available but reference coverage may vary by topic.
+- LLM query expansion improves flexibility but needs deterministic relevance filters to avoid off-topic retrieval.
+- Curated landmarks improve recall for known foundational papers. Evaluation reports expose them in source mix; use a no-curated rerun for strict generalization ablation if required.
 
-## Evaluation Evidence
+## Failure Handling
+- If LLM query planning is unavailable, use rule-based query expansion.
+- If external APIs fail, continue with partial results or demo-mode generated papers.
+- If too few papers are found, ask the Agent to broaden retrieval.
 
-See:
-
-- `docs/evaluation.md`
-- `outputs_submission/sample_research_report.md`
-
-The main corpus ablation compares arXiv-only, OpenAlex-only, combined retrieval, topic filtering, and verified landmark recovery.
+## Do Not
+- Do not compute graph centrality or communities.
+- Do not generate the final reading path.
+- Do not let the LLM directly decide the final accepted paper set.

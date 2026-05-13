@@ -59,7 +59,7 @@ def _summary_markdown(all_results: dict[str, dict]) -> str:
         "",
         "## Average Metrics",
         "",
-        "| Variant | Topics | Papers | Raw Records | Duplicates Removed | Abstract Coverage | Citation Metadata | Reference Coverage | Landmark Hit | Topic Precision | Graph Edges | Graph Edge Yield |",
+        "| Variant | Topics | Avg Papers | Avg Raw Records | Avg Duplicates Removed | Abstract Coverage | Citation Metadata | Reference Coverage | Landmark Hit | Topic Precision | Avg Graph Edges | Graph Edge Yield |",
         "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for variant in VARIANTS:
