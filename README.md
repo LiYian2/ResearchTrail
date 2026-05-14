@@ -106,15 +106,15 @@ Full evaluation details are in `docs/evaluation.md`.
 
 | Scope | Topics | Papers | Edges | Communities | Landmark Hit | Topic Precision | Ordering | Community Coverage | Stage Coverage |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| All benchmark topics | 12 | 21.5 | 121.8 | 3.9 | 61.9% | 91.7% | 68.4% | 91.4% | 95.8% |
+| Benchmark topics | 11 | 22.7 | 131.7 | 4.0 | 67.6% | 93.3% | 74.6% | 90.6% | 97.7% |
 
 ### Skill Ablations
 
 | Component | Main ablation | Key result |
 |---|---|---|
-| Skill 1 retrieval | arXiv only vs OpenAlex only vs combined vs filtering vs verified landmarks | Combined retrieval + filtering improves graph edge yield from 5.00 to 5.93 and topic precision from 60.6% to 66.6%. |
-| Skill 2 graph | citation-only vs similarity-only vs hybrid | Citation-only is sparse; hybrid reaches 96.9% largest component ratio and 91.4% path community coverage. |
-| Skill 2 similarity backend | TF-IDF vs LSA under the same hybrid graph mode | LSA improves largest component ratio from 91.7% to 93.7%, path community coverage from 87.2% to 89.7%, and foundation landmark hit from 66.7% to 75.0%. |
+| Skill 1 retrieval | arXiv only vs OpenAlex only vs combined vs filtering vs verified landmarks | Combined retrieval + filtering improves graph edge yield from 5.01 to 6.00 and topic precision from 61.4% to 67.2%. |
+| Skill 2 graph | citation-only vs similarity-only vs hybrid | Citation-only is sparse; hybrid reaches 97.7% largest component ratio and 90.6% path community coverage. |
+| Skill 2 similarity backend | TF-IDF vs LSA under the same hybrid graph mode | LSA improves largest component ratio from 92.1% to 94.3%, path community coverage from 86.0% to 88.8%, and foundation landmark hit from 72.7% to 81.8%. |
 | Skill 3 reading path | random vs citation count vs PageRank vs ResearchTrail staged | ResearchTrail is the only variant with high stage coverage, 97.7%, while keeping 95.3% topic precision. |
 
 ## Related Work
