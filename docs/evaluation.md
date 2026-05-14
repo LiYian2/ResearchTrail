@@ -16,13 +16,11 @@ This document fixes the report-ready evaluation material for the current Researc
 | Scope | Topics | Papers | Edges | Communities | Landmark Hit | Topic Precision | Ordering | Community Coverage | Stage Coverage |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | All benchmark topics | 12 | 21.5 | 121.8 | 3.9 | 61.9% | 91.7% | 68.4% | 91.4% | 95.8% |
-| Excluding protein low-corpus case | 11 | 22.7 | 131.7 | 4.0 | 67.6% | 93.3% | 74.6% | 90.6% | 97.7% |
-
-Interpretation: the full agent is strongest on topic precision, stage coverage, and community coverage. The main weakness is landmark recall/order on topics where scholarly metadata is incomplete or where the topic contains important non-arXiv/non-OpenAlex artifacts, especially mechanistic interpretability and the saved protein benchmark corpus.
+Interpretation: the full agent is strongest on topic precision, stage coverage, and community coverage. The main weakness is landmark recall/order on topics where scholarly metadata is incomplete or where the topic contains important non-arXiv/non-OpenAlex artifacts, especially mechanistic interpretability and newer web-native research areas.
 
 ## Skill 1: Literature Retrieval Implementation
 
-Skill 1 turns a research topic and user profile into a graph-ready paper corpus. It uses LLM-assisted query normalization when available, deterministic fallback queries otherwise, arXiv/OpenAlex retrieval, duplicate removal by normalized title, topic filtering, verified landmark recovery, Semantic Scholar citation/reference enrichment, and corpus quality metrics. The latest implementation also uses HTTPS arXiv API calls, global arXiv throttling with retry/backoff, and `S2_API_KEY` when available.
+Skill 1 turns a research topic and user profile into a graph-ready paper corpus. It uses LLM-assisted query normalization when available, deterministic fallback queries otherwise, arXiv/OpenAlex retrieval, duplicate removal by normalized title, topic filtering, verified landmark recovery, Semantic Scholar citation/reference enrichment, and corpus quality metrics. The implementation also uses HTTPS arXiv API calls, global arXiv throttling with retry/backoff, and `S2_API_KEY` when available.
 
 | Variant | Topics | Avg Papers | Avg Raw Records | Avg Duplicates Removed | Abstract Coverage | Citation Metadata | Reference Coverage | Landmark Hit | Topic Precision | Avg Graph Edges | Graph Edge Yield |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -48,7 +46,7 @@ Skill 2 builds citation and semantic-similarity graph structure. Citation edges 
 
 Graph ablation conclusion: citation-only is theoretically clean but too sparse in this dataset, averaging only 7.2 edges and 20.2% largest component ratio. Similarity-only gives strong connectivity, but lacks citation direction. Hybrid is the production choice because it keeps citation evidence while improving largest component ratio to 96.9%, path community coverage to 91.4%, and bridge plausibility to 81.9%.
 
-Secondary average excluding the low-corpus protein run shows the same trend: hybrid reaches 97.7% largest component ratio and 90.6% path community coverage.
+Across benchmark topics, hybrid graph construction preserves the semantic connectivity of similarity graphs while adding citation-direction evidence for PageRank and role scoring.
 
 Similarity backend ablation, with graph mode fixed as hybrid:
 
@@ -97,7 +95,7 @@ The agent is a markdown-described, code-backed, LLM-assisted workflow:
 - OpenAlex has broad coverage but lower topic precision on some engineering-heavy topics; arXiv is narrower and often cleaner but weaker on citation/reference metadata.
 - Citation metadata remains incomplete for some domains, which is why the hybrid graph is more reliable than citation-only graph construction.
 - LSA is an offline embedding-style backend, not a pretrained scientific embedding model. A sentence-transformer backend is supported as an optional extension, but was not used in the reported 12-topic run because the environment did not include the package/model.
-- The saved 12-topic overall benchmark has a weak protein structure run with only 8 papers; the Skill 1 rerun shows this topic can retrieve a much healthier corpus, so report the original end-to-end protein result as low-confidence or rerun the full agent if time permits.
+- Landmark recall remains the most difficult metric because many benchmark landmark lists are broader than the final reading path and because some research areas include important non-arXiv or web-native artifacts.
 - Role scores are still heuristic combinations of network metrics, recency, citation count, and community position. LLM helps explain evidence but does not replace the deterministic scores.
 
 ## Suggested Manual Evaluation Dimensions

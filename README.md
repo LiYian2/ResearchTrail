@@ -107,7 +107,6 @@ Full evaluation details are in `docs/evaluation.md`.
 | Scope | Topics | Papers | Edges | Communities | Landmark Hit | Topic Precision | Ordering | Community Coverage | Stage Coverage |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | All benchmark topics | 12 | 21.5 | 121.8 | 3.9 | 61.9% | 91.7% | 68.4% | 91.4% | 95.8% |
-| Excluding low-corpus protein run | 11 | 22.7 | 131.7 | 4.0 | 67.6% | 93.3% | 74.6% | 90.6% | 97.7% |
 
 ### Skill Ablations
 
